@@ -2,8 +2,9 @@
 
 <html>
 <head>
+
 <meta charset="UTF-8">
-<title>School Staff App</title>
+<title>School Staff</title>
 
 <style>
 
@@ -18,9 +19,6 @@ background:#1976d2;
 color:white;
 padding:15px;
 font-size:20px;
-display:flex;
-justify-content:space-between;
-align-items:center;
 }
 
 .container{
@@ -42,10 +40,22 @@ color:white;
 border:none;
 padding:8px 12px;
 border-radius:8px;
+margin-bottom:10px;
 }
 
-.back{
-margin-bottom:10px;
+.loading{
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:white;
+display:flex;
+justify-content:center;
+align-items:center;
+font-size:22px;
+font-weight:bold;
+z-index:999;
 }
 
 </style>
@@ -54,46 +64,48 @@ margin-bottom:10px;
 
 <body>
 
-<div class="header">
-<span id="title">Schools</span>
-<button onclick="syncData()">Sync</button>
+<div class="loading" id="loading">
+Loading Data...
+</div>
+
+<div class="header" id="title">
+Schools
 </div>
 
 <div class="container" id="app"></div>
 
 <script>
 
-const SHEET_ID = "1sVNq8pNMwhHjTdOCXF5H3rWGbUqEs1Jr3AfJhvrf9vA";
+const SHEET_ID = "PASTE_SHEET_ID";
 
-let data = JSON.parse(localStorage.getItem("schoolData")) || [];
+let data=[];
 
-let currentSchool = null;
+function loadSheet(){
 
-function syncData(){
-
-let url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+let url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
 fetch(url)
 .then(res=>res.text())
-.then(csv=>{
+.then(text=>{
 
-let rows = csv.split("\n").map(r=>r.split(","));
+let json=JSON.parse(text.substr(47).slice(0,-2));
 
-let headers = rows[0];
+let rows=json.table.rows;
+let cols=json.table.cols.map(c=>c.label);
 
-let json = rows.slice(1).map(row=>{
-let obj = {};
-headers.forEach((h,i)=>{
-obj[h.trim()] = row[i];
+data=rows.map(r=>{
+
+let obj={};
+
+r.c.forEach((cell,i)=>{
+obj[cols[i]]=cell?cell.v:"";
 });
+
 return obj;
+
 });
 
-localStorage.setItem("schoolData",JSON.stringify(json));
-
-data=json;
-
-alert("Data Imported Successfully");
+document.getElementById("loading").style.display="none";
 
 showSchools();
 
@@ -108,7 +120,7 @@ document.getElementById("title").innerText="Schools";
 let schools={};
 
 data.forEach(r=>{
-schools[r["School Code"]] = r["School Name"];
+schools[r["School Code"]]=r["School Name"];
 });
 
 let html="";
@@ -129,15 +141,11 @@ document.getElementById("app").innerHTML=html;
 
 function showStaff(code){
 
-currentSchool=code;
+let staff=data.filter(r=>r["School Code"]==code);
 
-let staff = data.filter(r=>r["School Code"]==code);
+document.getElementById("title").innerText=staff[0]["School Name"];
 
-let schoolName = staff[0]["School Name"];
-
-document.getElementById("title").innerText=schoolName;
-
-let html=`<button class="back" onclick="showSchools()">⬅ Back</button>`;
+let html=`<button onclick="showSchools()">⬅ Back</button>`;
 
 staff.forEach((s,i)=>{
 
@@ -156,14 +164,14 @@ document.getElementById("app").innerHTML=html;
 
 function showProfile(index,code){
 
-let staff = data.filter(r=>r["School Code"]==code);
+let staff=data.filter(r=>r["School Code"]==code);
 
-let s = staff[index];
+let s=staff[index];
 
 document.getElementById("title").innerText="Profile";
 
 let html=`
-<button class="back" onclick="showStaff('${code}')">⬅ Back</button>
+<button onclick="showStaff('${code}')">⬅ Back</button>
 
 <div class="card">
 
@@ -190,12 +198,7 @@ document.getElementById("app").innerHTML=html;
 
 }
 
-if(data.length>0){
-showSchools();
-}else{
-document.getElementById("app").innerHTML=
-"<div class='card'>Press Sync to Import Data</div>";
-}
+loadSheet();
 
 </script>
 
