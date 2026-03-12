@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta charset="UTF-8">
+<title>School Staff App</title>
+
+<style>
+
+body{
+font-family:Arial;
+margin:0;
+background:#f2f4f7;
+}
+
+.header{
+background:#1976d2;
+color:white;
+padding:15px;
+font-size:20px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+
+.container{
+padding:10px;
+}
+
+.card{
+background:white;
+margin:10px 0;
+padding:15px;
+border-radius:10px;
+box-shadow:0 2px 6px rgba(0,0,0,0.15);
+cursor:pointer;
+}
+
+button{
+background:#1976d2;
+color:white;
+border:none;
+padding:8px 12px;
+border-radius:8px;
+}
+
+.back{
+margin-bottom:10px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+<span id="title">Schools</span>
+<button onclick="syncData()">Sync</button>
+</div>
+
+<div class="container" id="app"></div>
+
+<script>
+
+const SHEET_ID = "PASTE_SHEET_ID_HERE";
+
+let data = JSON.parse(localStorage.getItem("schoolData")) || [];
+
+let currentSchool = null;
+
+function syncData(){
+
+let url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+
+fetch(url)
+.then(res=>res.text())
+.then(csv=>{
+
+let rows = csv.split("\n").map(r=>r.split(","));
+
+let headers = rows[0];
+
+let json = rows.slice(1).map(row=>{
+let obj = {};
+headers.forEach((h,i)=>{
+obj[h.trim()] = row[i];
+});
+return obj;
+});
+
+localStorage.setItem("schoolData",JSON.stringify(json));
+
+data=json;
+
+alert("Data Imported Successfully");
+
+showSchools();
+
+});
+
+}
+
+function showSchools(){
+
+document.getElementById("title").innerText="Schools";
+
+let schools={};
+
+data.forEach(r=>{
+schools[r["School Code"]] = r["School Name"];
+});
+
+let html="";
+
+Object.keys(schools).forEach(code=>{
+
+html+=`
+<div class="card" onclick="showStaff('${code}')">
+🏫 ${schools[code]}
+</div>
+`;
+
+});
+
+document.getElementById("app").innerHTML=html;
+
+}
+
+function showStaff(code){
+
+currentSchool=code;
+
+let staff = data.filter(r=>r["School Code"]==code);
+
+let schoolName = staff[0]["School Name"];
+
+document.getElementById("title").innerText=schoolName;
+
+let html=`<button class="back" onclick="showSchools()">⬅ Back</button>`;
+
+staff.forEach((s,i)=>{
+
+html+=`
+<div class="card" onclick="showProfile(${i},'${code}')">
+👤 ${s["Name of Staff"]}<br>
+${s["Nature Of Post"]}
+</div>
+`;
+
+});
+
+document.getElementById("app").innerHTML=html;
+
+}
+
+function showProfile(index,code){
+
+let staff = data.filter(r=>r["School Code"]==code);
+
+let s = staff[index];
+
+document.getElementById("title").innerText="Profile";
+
+let html=`
+<button class="back" onclick="showStaff('${code}')">⬅ Back</button>
+
+<div class="card">
+
+<b>Name:</b> ${s["Name of Staff"]}<br><br>
+
+<b>Gender:</b> ${s["Gender"]}<br><br>
+
+<b>DOB:</b> ${s["Date of Birth (dd/mm/yyyy)"]}<br><br>
+
+<b>Post:</b> ${s["Nature Of Post"]}<br><br>
+
+<b>Category:</b> ${s["Category of Post"]}<br><br>
+
+<b>Community:</b> ${s["Community"]}<br><br>
+
+<b>Mobile:</b> ${s["Mobile No"]}<br><br>
+
+<b>Status:</b> ${s["Status"]}
+
+</div>
+`;
+
+document.getElementById("app").innerHTML=html;
+
+}
+
+if(data.length>0){
+showSchools();
+}else{
+document.getElementById("app").innerHTML=
+"<div class='card'>Press Sync to Import Data</div>";
+}
+
+</script>
+
+</body>
+</html>
