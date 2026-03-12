@@ -6,75 +6,23 @@
 <title>School Staff Directory</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+<!-- Chart.js for graphs -->
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <style>
-body{
-font-family:Arial,sans-serif;
-margin:0;
-background:#f2f4f7;
-}
-
-.header{
-background:#1976d2;
-color:white;
-padding:15px;
-font-size:20px;
-display:flex;
-align-items:center;
-justify-content:space-between;
-}
-
-.search-input{
-padding:8px;
-border-radius:8px;
-border:none;
-width:60%;
-font-size:16px;
-}
-
-.container{
-padding:10px;
-}
-
-.card{
-background:white;
-margin:10px 0;
-padding:15px;
-border-radius:10px;
-box-shadow:0 2px 6px rgba(0,0,0,0.15);
-cursor:pointer;
-transition:0.2s;
-}
-
-.card:hover{
-transform:scale(1.02);
-}
-
-.hm{
-border-left:4px solid #ff5722;
-padding-left:10px;
-position:relative;
-}
-
-.hm::before{
-content:"👑";
-position:absolute;
-left:-25px;
-top:5px;
-font-size:18px;
-}
-
-.button-back{
-background:#1976d2;color:white;border:none;padding:8px 12px;border-radius:8px;margin-bottom:10px;
-}
-
-.loading{
-position:fixed;top:0;left:0;width:100%;height:100%;background:white;
-display:flex;justify-content:center;align-items:center;font-size:22px;font-weight:bold;z-index:999;
-}
-
-.staff-count{
-font-size:12px;color:#555;margin-left:10px;
-}
+body{font-family:Arial,sans-serif;margin:0;background:#f2f4f7;}
+.header{background:#1976d2;color:white;padding:15px;font-size:20px;display:flex;align-items:center;justify-content:space-between;}
+.search-input{padding:8px;border-radius:8px;border:none;width:60%;font-size:16px;}
+.container{padding:10px;}
+.card{background:white;margin:10px 0;padding:15px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.15);cursor:pointer;transition:0.2s;}
+.card:hover{transform:scale(1.02);}
+.hm{border-left:4px solid #ff5722;padding-left:10px;position:relative;}
+.hm::before{content:"👑";position:absolute;left:-25px;top:5px;font-size:18px;}
+.button-back{background:#1976d2;color:white;border:none;padding:8px 12px;border-radius:8px;margin-bottom:10px;}
+.loading{position:fixed;top:0;left:0;width:100%;height:100%;background:white;display:flex;justify-content:center;align-items:center;font-size:22px;font-weight:bold;z-index:999;}
+.staff-count{font-size:12px;color:#555;margin-left:10px;}
+.chart-container{background:white;padding:10px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.15);margin:10px 0;}
 </style>
 
 </head>
@@ -99,7 +47,6 @@ let currentScreen="schools";
 let currentSchoolCode="";
 let currentStaffIndex=0;
 
-// --- Load Sheet Data ---
 function loadSheet(){
 let url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`;
 fetch(url)
@@ -125,13 +72,9 @@ function showSchools(){
 currentScreen="schools";
 document.getElementById("title").innerText="Schools";
 document.getElementById("search").value="";
-
 let schoolsMap=new Map();
 data.forEach(r=>schoolsMap.set(r["School Code"],r["School Name"]));
-
-// calculate staff count & category breakdown
-let schoolCounts={};
-let schoolCategory={};
+let schoolCounts={}, schoolCategory={};
 data.forEach(r=>{
 let code=r["School Code"];
 schoolCounts[code]=(schoolCounts[code]||0)+1;
@@ -139,14 +82,11 @@ schoolCategory[code]=schoolCategory[code]||{};
 let cat=r["Category of Post"]||"Other";
 schoolCategory[code][cat]=(schoolCategory[code][cat]||0)+1;
 });
-
 let html="";
 for(let [code,name] of schoolsMap.entries()){
 let count=schoolCounts[code]||0;
 let catList="";
-for(let cat in schoolCategory[code]){
-catList+=`${cat}: ${schoolCategory[code][cat]}  `;
-}
+for(let cat in schoolCategory[code]) catList+=`${cat}: ${schoolCategory[code][cat]}  `;
 html+=`<div class="card" onclick="showStaff('${code}')">🏫 ${name} <span class="staff-count">(${count} staff)</span><br><small>${catList}</small></div>`;
 }
 document.getElementById("app").innerHTML=html;
@@ -165,6 +105,7 @@ staff.forEach((s,i)=>{
 let hmClass=s["isActingHM"]?"hm":"";
 html+=`<div class="card ${hmClass}" onclick="showProfile(${i})">👤 ${s["Name of Staff"]}<br>${s["Nature Of Post"]}</div>`;
 });
+html+=generateChart(staff);
 document.getElementById("app").innerHTML=html;
 }
 
@@ -190,14 +131,29 @@ let html=`<button class="button-back" onclick="showStaff('${currentSchoolCode}')
 document.getElementById("app").innerHTML=html;
 }
 
+// --- Generate Chart ---
+function generateChart(staff){
+let categories={};
+staff.forEach(s=>{
+let cat=s["Category of Post"]||"Other";
+categories[cat]=(categories[cat]||0)+1;
+});
+let chartId="chart_"+Date.now();
+let html=`<div class="chart-container"><canvas id="${chartId}" height="200"></canvas></div>`;
+setTimeout(()=>{
+let ctx=document.getElementById(chartId).getContext('2d');
+new Chart(ctx,{type:'bar',data:{labels:Object.keys(categories),datasets:[{label:'Staff Count',data:Object.values(categories),backgroundColor:'#1976d2'}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+},50);
+return html;
+}
+
 // --- Search Filter ---
 function filterList(){
 let term=document.getElementById("search").value.toLowerCase();
 if(currentScreen==="schools"){
 let schoolsMap=new Map();
 data.forEach(r=>schoolsMap.set(r["School Code"],r["School Name"]));
-let schoolCounts={};
-let schoolCategory={};
+let schoolCounts={}, schoolCategory={};
 data.forEach(r=>{
 let code=r["School Code"];
 schoolCounts[code]=(schoolCounts[code]||0)+1;
@@ -210,9 +166,7 @@ for(let [code,name] of schoolsMap.entries()){
 if(name.toLowerCase().includes(term)){
 let count=schoolCounts[code]||0;
 let catList="";
-for(let cat in schoolCategory[code]){
-catList+=`${cat}: ${schoolCategory[code][cat]}  `;
-}
+for(let cat in schoolCategory[code]) catList+=`${cat}: ${schoolCategory[code][cat]}  `;
 html+=`<div class="card" onclick="showStaff('${code}')">🏫 ${name} <span class="staff-count">(${count} staff)</span><br><small>${catList}</small></div>`;
 }
 }
@@ -224,13 +178,13 @@ staff.forEach((s,i)=>{
 let hmClass=s["isActingHM"]?"hm":"";
 html+=`<div class="card ${hmClass}" onclick="showProfile(${i})">👤 ${s["Name of Staff"]}<br>${s["Nature Of Post"]}</div>`;
 });
+html+=generateChart(staff);
 document.getElementById("app").innerHTML=html;
 }
 }
 
 // --- Initialize ---
 loadSheet();
-
 </script>
 
 </body>
