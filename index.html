@@ -102,6 +102,33 @@
             border-radius: 6px;
             font-size: 13px;
         }
+
+        #loadingBox {
+            text-align: center;
+            margin: 20px;
+            font-size: 18px;
+            color: #2c7be5;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 5px solid #ddd;
+            border-top: 5px solid #2c7be5;
+            border-radius: 50%;
+            margin: 10px auto;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 
 </head>
@@ -109,6 +136,11 @@
 <body>
 
     <h2>Advanced MIS Dynamic Teachers Data Table Builder</h2>
+
+    <div id="loadingBox">
+        <div class="spinner"></div>
+        <div>Loading Data...</div>
+    </div>
 
     <input type="text" placeholder="Search Column..." onkeyup="searchColumns(this.value)">
 
@@ -154,7 +186,7 @@
             createCheckboxes()
             createManagementDropdown()
             loadSavedTables()
-
+            document.getElementById("loadingBox").style.display = "none"
         }
 
         function createCheckboxes() {
