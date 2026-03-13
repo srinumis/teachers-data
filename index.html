@@ -1,191 +1,569 @@
 <!DOCTYPE html>
 
 <html>
+
 <head>
-<meta charset="UTF-8">
-<title>School Staff Directory</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
-<!-- Chart.js for graphs -->
+    <meta charset="UTF-8">
+    <title>Advanced MIS Dynamic Teachers Data Table Builder</title>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial;
+            margin: 20px;
+        }
 
-<style>
-body{font-family:Arial,sans-serif;margin:0;background:#f2f4f7;}
-.header{background:#1976d2;color:white;padding:15px;font-size:20px;display:flex;align-items:center;justify-content:space-between;}
-.search-input{padding:8px;border-radius:8px;border:none;width:60%;font-size:16px;}
-.container{padding:10px;}
-.card{background:white;margin:10px 0;padding:15px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.15);cursor:pointer;transition:0.2s;}
-.card:hover{transform:scale(1.02);}
-.hm{border-left:4px solid #ff5722;padding-left:10px;position:relative;}
-.hm::before{content:"👑";position:absolute;left:-25px;top:5px;font-size:18px;}
-.button-back{background:#1976d2;color:white;border:none;padding:8px 12px;border-radius:8px;margin-bottom:10px;}
-.loading{position:fixed;top:0;left:0;width:100%;height:100%;background:white;display:flex;justify-content:center;align-items:center;font-size:22px;font-weight:bold;z-index:999;}
-.staff-count{font-size:12px;color:#555;margin-left:10px;}
-.chart-container{background:white;padding:10px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.15);margin:10px 0;}
-</style>
+        h2 {
+            text-align: center;
+        }
+
+        .controls {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .controls input,
+        .controls select {
+            padding: 6px;
+            margin: 3px;
+        }
+
+        .checkbox-container {
+            border: 1px solid #ccc;
+            padding: 10px;
+            max-height: 150px;
+            overflow: auto;
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            cursor: move;
+            padding: 3px;
+        }
+
+        button {
+            padding: 5px 10px;
+            margin: 3px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            border: 1px solid #aaa;
+            padding: 6px;
+            font-size: 13px;
+        }
+
+        th {
+            background: #2c7be5;
+            color: white;
+            position: sticky;
+            top: 0;
+        }
+
+        tbody tr:nth-child(even) {
+            background: #f2f2f2;
+        }
+
+        .table-box {
+            border: 1px solid #ccc;
+            margin-top: 20px;
+            padding: 10px;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .searchBox {
+            padding: 5px;
+        }
+
+        .summary {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .card {
+            background: #f2f6ff;
+            border: 1px solid #cbd6ff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+    </style>
 
 </head>
+
 <body>
 
-<div class="loading" id="loading">Loading Data...</div>
+    <h2>Advanced MIS Dynamic Teachers Data Table Builder</h2>
 
-<div class="header">
-<span id="title">Schools</span>
-<input type="text" id="search" class="search-input" placeholder="Search..." oninput="filterList()">
+    <input type="text" placeholder="Search Column..." onkeyup="searchColumns(this.value)">
+
+    <button onclick="selectAll()">Select All</button> <button onclick="unselectAll()">Unselect All</button>
+
+    <div class="checkbox-container" id="checkboxArea"></div>
+
+    <div class="controls">
+
+        <input type="text" id="tableTitle" placeholder="Enter Table Title">
+
+        <select id="managementFilter">
+            <option value="all">All Management</option>
+        </select>
+
+        <select id="hmFilter">
+            <option value="all">All HM</option>
+            <option value="Yes">Acting HM</option>
+            <option value="No">Non Acting HM</option>
+        </select>
+
+        <button onclick="createTable()">Create Table</button>
+        <button onclick="exportAllTables()">Export All Tables</button>
+    </div>
+
+    <div id="tablesArea"></div>
+
+    <script>
+
+        let fullData = []
+        let columns = []
+
+        const sheetURL = "https://opensheet.elk.sh/1sVNq8pNMwhHjTdOCXF5H3rWGbUqEs1Jr3AfJhvrf9vA/teachers"
+
+        async function loadData() {
+
+            let res = await fetch(sheetURL)
+            let data = await res.json()
+
+            fullData = data
+            columns = Object.keys(data[0])
+
+            createCheckboxes()
+            createManagementDropdown()
+            loadSavedTables()
+
+        }
+
+        function createCheckboxes() {
+
+            let area = document.getElementById("checkboxArea")
+            area.innerHTML = ""
+
+            columns.forEach(col => {
+
+                area.innerHTML += `
+<label draggable="true">
+<input type="checkbox" value="${col}">
+${col}
+</label>
+`
+
+            })
+
+            enableDrag()
+
+        }
+
+        function selectAll() {
+            document.querySelectorAll("#checkboxArea input").forEach(c => c.checked = true)
+        }
+
+        function unselectAll() {
+            document.querySelectorAll("#checkboxArea input").forEach(c => c.checked = false)
+        }
+
+        function searchColumns(keyword) {
+
+            let labels = document.querySelectorAll("#checkboxArea label")
+
+            labels.forEach(l => {
+
+                if (l.innerText.toLowerCase().includes(keyword.toLowerCase())) {
+                    l.style.display = "inline-block"
+                } else {
+                    l.style.display = "none"
+                }
+
+            })
+
+        }
+
+        function createManagementDropdown() {
+
+            let dropdown = document.getElementById("managementFilter")
+
+            let unique = [...new Set(fullData.map(r => r["School Management"]))]
+
+            unique.forEach(m => {
+
+                let opt = document.createElement("option")
+                opt.value = m
+                opt.textContent = m
+
+                dropdown.appendChild(opt)
+
+            })
+
+        }
+
+        function createTable() {
+
+
+            let title = document.getElementById("tableTitle").value || "Table"
+
+            let management = document.getElementById("managementFilter").value
+            let hm = document.getElementById("hmFilter").value
+
+            let checked = [...document.querySelectorAll("#checkboxArea input:checked")]
+                .map(c => c.value)
+
+            if (checked.length == 0) {
+                alert("Select columns")
+                return
+            }
+
+            let filtered = fullData.filter(row => {
+
+                let m = (management == "all" || row["School Management"] == management)
+                let h = (hm == "all" || row["isActingHM"] == hm)
+
+                return m && h
+
+            })
+
+
+            let id = Date.now()
+
+            let tableData = { id, title, columns: checked, management, hm }
+
+            saveTable(tableData)
+
+            renderTable(tableData, filtered)
+
+        }
+
+        function renderTable(config, data, index) {
+
+            let tableId = "t" + Date.now()
+
+            let html = `
+
+<div class="table-box" data-id="${config.id}">
+
+<div class="table-header">
+
+<h3>${config.title}</h3>
+
+<div>
+
+<input class="searchBox" placeholder="Search"
+onkeyup="searchTable('${tableId}',this.value)">
+
+<button onclick="exportExcel('${tableId}')">Excel</button>
+
+<button onclick="deleteTable(this)">Delete</button>
+
 </div>
 
-<div class="container" id="app"></div>
+</div>
+${createSummary(data)}
 
-<script>
-const SHEET_ID="1sVNq8pNMwhHjTdOCXF5H3rWGbUqEs1Jr3AfJhvrf9vA";
-const SHEET_NAME="Teachers";
+<div style="max-height:400px;overflow:auto">
 
-let data=[];
-let filteredData=[];
-let currentScreen="schools";
-let currentSchoolCode="";
-let currentStaffIndex=0;
+<table id="${tableId}">
 
-function loadSheet(){
-let url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`;
-fetch(url)
-.then(res=>res.text())
-.then(text=>{
-let json=JSON.parse(text.substr(47).slice(0,-2));
-let rows=json.table.rows;
-let cols=json.table.cols.map(c=>c.label);
-data=rows.map(r=>{
-let obj={};
-r.c.forEach((cell,i)=>{ obj[cols[i]]=cell?cell.v:""; });
-return obj;
-});
-document.getElementById("loading").style.display="none";
-currentScreen="schools";
-filteredData=data;
-showSchools();
-});
-}
+<thead>
+<tr>
+${config.columns.map(c => `<th>${c}</th>`).join("")}
+</tr>
+</thead>
 
-// --- Display Schools ---
-function showSchools(){
-currentScreen="schools";
-document.getElementById("title").innerText="Schools";
-document.getElementById("search").value="";
-let schoolsMap=new Map();
-data.forEach(r=>schoolsMap.set(r["School Code"],r["School Name"]));
-let schoolCounts={}, schoolCategory={};
-data.forEach(r=>{
-let code=r["School Code"];
-schoolCounts[code]=(schoolCounts[code]||0)+1;
-schoolCategory[code]=schoolCategory[code]||{};
-let cat=r["Category of Post"]||"Other";
-schoolCategory[code][cat]=(schoolCategory[code][cat]||0)+1;
-});
-let html="";
-for(let [code,name] of schoolsMap.entries()){
-let count=schoolCounts[code]||0;
-let catList="";
-for(let cat in schoolCategory[code]) catList+=`${cat}: ${schoolCategory[code][cat]}  `;
-html+=`<div class="card" onclick="showStaff('${code}')">🏫 ${name} <span class="staff-count">(${count} staff)</span><br><small>${catList}</small></div>`;
-}
-document.getElementById("app").innerHTML=html;
-}
+<tbody>
 
-// --- Display Staff ---
-function showStaff(code){
-currentScreen="staff";
-currentSchoolCode=code;
-document.getElementById("search").value="";
-let staff=data.filter(r=>r["School Code"]==code);
-document.getElementById("title").innerText=staff[0]?staff[0]["School Name"]:"Staff";
-filteredData=staff;
-let html=`<button class="button-back" onclick="showSchools()">⬅ Back</button>`;
-staff.forEach((s,i)=>{
-let hmClass=s["isActingHM"]?"hm":"";
-html+=`<div class="card ${hmClass}" onclick="showProfile(${i})">👤 ${s["Name of Staff"]}<br>${s["Nature Of Post"]}</div>`;
-});
-html+=generateChart(staff);
-document.getElementById("app").innerHTML=html;
-}
+${data.map((row, i) => {
 
-// --- Display Profile ---
-function showProfile(index){
-currentScreen="profile";
-currentStaffIndex=index;
-let staff=filteredData;
-let s=staff[index];
-document.getElementById("title").innerText="Profile";
-let hmHighlight=s["isActingHM"]?" (Acting HM)":"";
-let html=`<button class="button-back" onclick="showStaff('${currentSchoolCode}')">⬅ Back</button>
-<div class="card">
-<b>Name:</b> ${s["Name of Staff"]}${hmHighlight}<br><br>
-<b>Gender:</b> ${s["Gender"]}<br><br>
-<b>DOB:</b> ${s["Date of Birth (dd/mm/yyyy)"]}<br><br>
-<b>Post:</b> ${s["Nature Of Post"]}<br><br>
-<b>Category:</b> ${s["Category of Post"]}<br><br>
-<b>Community:</b> ${s["Community"]}<br><br>
-<b>Mobile:</b> ${s["Mobile No"]}<br><br>
-<b>Status:</b> ${s["Status"]}
-</div>`;
-document.getElementById("app").innerHTML=html;
-}
+                let tr = ""
 
-// --- Generate Chart ---
-function generateChart(staff){
-let categories={};
-staff.forEach(s=>{
-let cat=s["Category of Post"]||"Other";
-categories[cat]=(categories[cat]||0)+1;
-});
-let chartId="chart_"+Date.now();
-let html=`<div class="chart-container"><canvas id="${chartId}" height="200"></canvas></div>`;
-setTimeout(()=>{
-let ctx=document.getElementById(chartId).getContext('2d');
-new Chart(ctx,{type:'bar',data:{labels:Object.keys(categories),datasets:[{label:'Staff Count',data:Object.values(categories),backgroundColor:'#1976d2'}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
-},50);
-return html;
-}
+                config.columns.forEach(col => {
 
-// --- Search Filter ---
-function filterList(){
-let term=document.getElementById("search").value.toLowerCase();
-if(currentScreen==="schools"){
-let schoolsMap=new Map();
-data.forEach(r=>schoolsMap.set(r["School Code"],r["School Name"]));
-let schoolCounts={}, schoolCategory={};
-data.forEach(r=>{
-let code=r["School Code"];
-schoolCounts[code]=(schoolCounts[code]||0)+1;
-schoolCategory[code]=schoolCategory[code]||{};
-let cat=r["Category of Post"]||"Other";
-schoolCategory[code][cat]=(schoolCategory[code][cat]||0)+1;
-});
-let html="";
-for(let [code,name] of schoolsMap.entries()){
-if(name.toLowerCase().includes(term)){
-let count=schoolCounts[code]||0;
-let catList="";
-for(let cat in schoolCategory[code]) catList+=`${cat}: ${schoolCategory[code][cat]}  `;
-html+=`<div class="card" onclick="showStaff('${code}')">🏫 ${name} <span class="staff-count">(${count} staff)</span><br><small>${catList}</small></div>`;
-}
-}
-document.getElementById("app").innerHTML=html;
-}else if(currentScreen==="staff"){
-let staff=filteredData.filter(s=>s["Name of Staff"].toLowerCase().includes(term));
-let html=`<button class="button-back" onclick="showSchools()">⬅ Back</button>`;
-staff.forEach((s,i)=>{
-let hmClass=s["isActingHM"]?"hm":"";
-html+=`<div class="card ${hmClass}" onclick="showProfile(${i})">👤 ${s["Name of Staff"]}<br>${s["Nature Of Post"]}</div>`;
-});
-html+=generateChart(staff);
-document.getElementById("app").innerHTML=html;
-}
-}
+                    if (col == "Sl.No") {
+                        tr += `<td>${i + 1}</td>`
+                    } else {
+                        tr += `<td>${row[col] || ""}</td>`
+                    }
 
-// --- Initialize ---
-loadSheet();
-</script>
+                })
+
+                return `<tr>${tr}</tr>`
+
+            }).join("")}
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+`
+
+            document.getElementById("tablesArea").innerHTML += html
+
+        }
+
+        function searchTable(id, keyword) {
+
+            let rows = document.querySelectorAll(`#${id} tbody tr`)
+
+            rows.forEach(r => {
+
+                let text = r.innerText.toLowerCase()
+
+                r.style.display = text.includes(keyword.toLowerCase()) ? "" : "none"
+
+            })
+
+        }
+
+        function exportExcel(tableId) {
+
+            let table = document.getElementById(tableId)
+
+            let wb = XLSX.utils.book_new()
+
+            let ws = XLSX.utils.table_to_sheet(table)
+
+            let range = XLSX.utils.decode_range(ws['!ref'])
+
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+
+                    let cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]
+
+                    if (cell) {
+
+                        cell.s = {
+                            border: {
+                                top: { style: "thin" },
+                                bottom: { style: "thin" },
+                                left: { style: "thin" },
+                                right: { style: "thin" }
+                            }
+                        }
+
+                        if (R == 0) {
+                            cell.s.fill = { fgColor: { rgb: "2C7BE5" } }
+                            cell.s.font = { bold: true, color: { rgb: "FFFFFF" } }
+                        }
+
+                    }
+
+                }
+
+            }
+
+            let cols = []
+
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                cols.push({ wch: 20 })
+            }
+
+            ws['!cols'] = cols
+
+            ws['!freeze'] = { xSplit: 0, ySplit: 1 }
+
+            XLSX.utils.book_append_sheet(wb, ws, "Report")
+
+            let title = table.closest(".table-box").querySelector("h3").innerText
+
+            XLSX.writeFile(wb, title + ".xlsx")
+
+        }
+
+        function exportAllTables() {
+
+            let tables = document.querySelectorAll("#tablesArea table")
+
+            if (tables.length == 0) {
+                alert("No tables to export")
+                return
+            }
+
+            let wb = XLSX.utils.book_new()
+
+            tables.forEach((table, i) => {
+
+                let ws = XLSX.utils.table_to_sheet(table)
+
+                let range = XLSX.utils.decode_range(ws['!ref'])
+
+                for (let R = range.s.r; R <= range.e.r; ++R) {
+
+                    for (let C = range.s.c; C <= range.e.c; ++C) {
+
+                        let cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]
+
+                        if (cell) {
+
+                            cell.s = {
+                                border: {
+                                    top: { style: "thin" },
+                                    bottom: { style: "thin" },
+                                    left: { style: "thin" },
+                                    right: { style: "thin" }
+                                }
+                            }
+
+                            if (R == 0) {
+                                cell.s.fill = { fgColor: { rgb: "2C7BE5" } }
+                                cell.s.font = { bold: true, color: { rgb: "FFFFFF" } }
+                            }
+
+                        }
+
+                    }
+
+                }
+
+                let cols = []
+
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    cols.push({ wch: 20 })
+                }
+
+                ws['!cols'] = cols
+
+                ws['!freeze'] = { xSplit: 0, ySplit: 1 }
+
+                let title = table.closest(".table-box").querySelector("h3").innerText
+
+                XLSX.utils.book_append_sheet(wb, ws, title.substring(0, 30))
+
+            })
+
+            XLSX.writeFile(wb, "MIS_Report.xlsx")
+
+        }
+
+        function deleteTable(btn) {
+
+            if (!confirm("Are you sure you want to permanently delete this table?")) {
+                return
+            }
+
+            let box = btn.closest(".table-box")
+
+            let id = box.dataset.id
+
+            let saved = JSON.parse(localStorage.getItem("misTables") || "[]")
+
+            saved = saved.filter(t => t.id != id)
+
+            localStorage.setItem("misTables", JSON.stringify(saved))
+
+            box.remove()
+
+        }
+
+        function saveTable(data) {
+
+            let saved = JSON.parse(localStorage.getItem("misTables") || "[]")
+
+            saved.push(data)
+
+            localStorage.setItem("misTables", JSON.stringify(saved))
+
+        }
+
+        function loadSavedTables() {
+
+            let saved = JSON.parse(localStorage.getItem("misTables") || "[]")
+
+            saved.forEach((cfg, i) => {
+
+                let filtered = fullData.filter(row => {
+
+                    let m = (cfg.management == "all" || row["School Management"] == cfg.management)
+                    let h = (cfg.hm == "all" || row["isActingHM"] == cfg.hm)
+
+                    return m && h
+
+                })
+
+                renderTable(cfg, filtered, i)
+
+            })
+
+        }
+        function enableDrag() {
+
+            let container = document.getElementById("checkboxArea")
+
+            let drag
+
+            container.addEventListener("dragstart", e => {
+                drag = e.target
+            })
+
+            container.addEventListener("dragover", e => {
+                e.preventDefault()
+            })
+
+            container.addEventListener("drop", e => {
+                if (e.target.tagName === "LABEL") {
+                    container.insertBefore(drag, e.target)
+                }
+            })
+
+        }
+        function createSummary(data) {
+
+            let total = data.length
+
+            let actingHM = data.filter(r => r["isActingHM"] == "Yes").length
+
+            let nonHM = data.filter(r => r["isActingHM"] == "No").length
+
+            let govt = data.filter(r => r["School Management"] == "Government").length
+
+            let private = data.filter(r => r["School Management"] == "Private").length
+
+            return `
+<div class="summary">
+
+<div class="card">Total Rows : ${total}</div>
+
+<div class="card">Acting HM : ${actingHM}</div>
+
+<div class="card">Non Acting HM : ${nonHM}</div>
+
+<div class="card">Govt Schools : ${govt}</div>
+
+<div class="card">Private Schools : ${private}</div>
+
+</div>
+`
+
+        }
+
+        loadData()
+
+    </script>
 
 </body>
+
 </html>
